@@ -163,7 +163,10 @@ class USVehicleAccidentAnalysis:
         write_output(df, output_path, output_format)
         return [row[0] for row in df.collect()]
     
-        
+
+
+
+# test cases 
 # df =  df_primary_person.filter(col("PRSN_GNDR_ID") == "MALE").filter(col("DEATH_CNT") > 0)
 # print(df.count())
 
