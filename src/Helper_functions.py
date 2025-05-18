@@ -1,6 +1,8 @@
 import yaml
 
 
+# Helping functions for the US Vehicle Accident Analysis project
+
 def load_csv_data_to_df(spark, file_path):
 
     return spark.read.option("inferSchema", "true").csv(file_path, header=True)

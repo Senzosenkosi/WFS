@@ -2,7 +2,7 @@ from pyspark.sql.functions import col,row_number
 from pyspark.sql import SparkSession
 from pyspark.sql.window import Window
 from src.Helper_functions import read_yaml, write_output,load_csv_data_to_df
-spark = SparkSession.builder.appName("USVehicleAccidentAnalysis").getOrCreate()
+# spark = SparkSession.builder.appName("USVehicleAccidentAnalysis").getOrCreate()
 
 class USVehicleAccidentAnalysis:
     
