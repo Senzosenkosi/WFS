@@ -1,0 +1,10 @@
+.DS_Store
+.idea/
+dist
+Data
+Output
+bcg.egg-info
+build
+__pycache__/
+playground.py
+wfs/*
