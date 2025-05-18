@@ -1,19 +1,27 @@
 from pyspark.sql.functions import col,row_number
 from pyspark.sql import SparkSession
 from pyspark.sql.window import Window
-
+from src.Helper_functions import read_yaml, write_output,load_csv_data_to_df
 spark = SparkSession.builder.appName("USVehicleAccidentAnalysis").getOrCreate()
 
 class USVehicleAccidentAnalysis:
     
     def __init__(self, spark, config):
         
-        self.df_damages= spark.read.csv("/Users/senzosenkosishezi/Desktop/WFS/WFS/Data/Damages_use.csv", header=True, inferSchema=True)
-        self.df_charges= spark.read.csv("/Users/senzosenkosishezi/Desktop/WFS/WFS/Data/Charges_use.csv", header=True, inferSchema=True)
-        self.df_endorse= spark.read.csv("/Users/senzosenkosishezi/Desktop/WFS/WFS/Data/Endorse_use.csv", header=True, inferSchema=True)
-        self.df_primary_person= spark.read.csv("/Users/senzosenkosishezi/Desktop/WFS/WFS/Data/Primary_person_use.csv", header=True, inferSchema=True)
-        self.df_units= spark.read.csv("/Users/senzosenkosishezi/Desktop/WFS/WFS/Data/Units_use.csv", header=True, inferSchema=True)    
-        self.df_restrict= spark.read.csv("/Users/senzosenkosishezi/Desktop/WFS/WFS/Data/Restrict_use.csv", header=True, inferSchema=True)
+        input_file_paths = config.get("INPUT_FILENAME")
+        self.df_charges = load_csv_data_to_df(spark, input_file_paths.get("Charges"))
+        self.df_damages = load_csv_data_to_df(spark, input_file_paths.get("Damages"))
+        self.df_endorse = load_csv_data_to_df(spark, input_file_paths.get("Endorse"))
+        self.df_primary_person = load_csv_data_to_df(spark, input_file_paths.get("Primary_Person"))
+        self.df_units = load_csv_data_to_df(spark, input_file_paths.get("Units"))
+        self.df_restrict = load_csv_data_to_df(spark, input_file_paths.get("Restrict"))
+        
+        # self.df_damages= spark.read.csv("/Users/senzosenkosishezi/Desktop/WFS/WFS/Data/Damages_use.csv", header=True, inferSchema=True)
+        # self.df_charges= spark.read.csv("/Users/senzosenkosishezi/Desktop/WFS/WFS/Data/Charges_use.csv", header=True, inferSchema=True)
+        # self.df_endorse= spark.read.csv("/Users/senzosenkosishezi/Desktop/WFS/WFS/Data/Endorse_use.csv", header=True, inferSchema=True)
+        # self.df_primary_person= spark.read.csv("/Users/senzosenkosishezi/Desktop/WFS/WFS/Data/Primary_person_use.csv", header=True, inferSchema=True)
+        # self.df_units= spark.read.csv("/Users/senzosenkosishezi/Desktop/WFS/WFS/Data/Units_use.csv", header=True, inferSchema=True)    
+        # self.df_restrict= spark.read.csv("/Users/senzosenkosishezi/Desktop/WFS/WFS/Data/Restrict_use.csv", header=True, inferSchema=True)
     
     
     def count_male_accidents(self, output_file_path, file_format):
@@ -23,21 +31,27 @@ class USVehicleAccidentAnalysis:
         return df.count()
         """
         df =  self.df_primary_person.filter(col("PRSN_GNDR_ID") == "MALE").filter(col("DEATH_CNT") > 2)
+        write_output(df, output_file_path, file_format)
+        write_output(df, output_file_path, file_format)
         return df.count()
     
     def count_2_wheeler_accidents(self, output_path, output_format):
         df =self.df_units.filter(col("VEH_BODY_STYL_ID").contains( "MOTORCYCLE"))
+        
+        write_output(df, output_path, output_format)
         return df.count()
         
     
     def top_5_vehicle_makes_for_fatal_crashes_without_airbags(self, output_path, output_format):
         
-       df= self.df_units.join(self.df_primary_person,df_units["CRASH_ID"]== self.df_primary_person["CRASH_ID"],"inner").\
+       df= self.df_units.join(self.df_primary_person,self.df_units["CRASH_ID"]== self.df_primary_person["CRASH_ID"],"inner").\
         filter(col("PRSN_INJRY_SEV_ID") == "KILLED").filter(col("PRSN_AIRBAG_ID") == "NOT DEPLOYED").filter(col("VEH_MAKE_ID")!= "NA").\
         groupby("VEH_MAKE_ID").\
         count()\
         .orderBy(col("count").desc())\
         .limit(5)
+        
+       write_output(df, output_path, output_format)
         
        return [row[0] for row in df.collect()]
    
@@ -45,13 +59,18 @@ class USVehicleAccidentAnalysis:
        hit_and_run = self.df_units.select("CRASH_ID", "VEH_HNR_FL").join(self.df_primary_person.select("CRASH_ID", "DRVR_LIC_TYPE_ID"), on ="CRASH_ID",how="inner")
        # print(hit_and_run.show(5)) 
        hit_and_run = hit_and_run.filter(col("VEH_HNR_FL") == "Y").filter(col("DRVR_LIC_TYPE_ID").isin(["DRIVER LICENSE", "COMMERCIAL DRIVER LIC."]))
-
+       
+       write_output(hit_and_run, output_path, output_format)
+       
        return hit_and_run.count()
    
     
 
     def get_state_with_no_female_accident(self, output_path, output_format):
         state_with_no_female= self.df_primary_person.filter(col("PRSN_GNDR_ID") != "FEMALE").groupby("DRVR_LIC_STATE_ID").count().orderBy(col("count").desc())
+        
+        write_output(state_with_no_female, output_path, output_format)
+        
         return state_with_no_female.first().DRVR_LIC_STATE_ID
     
     
@@ -60,6 +79,7 @@ class USVehicleAccidentAnalysis:
         .withColumnRenamed("sum(TOT_CASUALTIES_CNT)", "TOT_CASUALTIES_CNT_AGG").orderBy(col("TOT_CASUALTIES_CNT_AGG").desc())
         df_top_3_to_5 = top_3_to_5.limit(5).subtract(top_3_to_5.limit(2))
         
+        write_output(df_top_3_to_5, output_path, output_format)
         return [veh[0] for veh in df_top_3_to_5.select("VEH_MAKE_ID").collect()]
     
     
@@ -74,7 +94,8 @@ class USVehicleAccidentAnalysis:
         .withColumn("row",row_number().over(w))\
         .filter(col("row") == 1)\
         .drop("row","count")    
-        
+        write_output(top_ethinic, output_path, output_format)
+
         return top_ethinic
         
     def get_top_5_zip_codes_with_alcohols_as_cf_for_crash(self, output_path, output_format):
@@ -85,6 +106,7 @@ class USVehicleAccidentAnalysis:
         .count()\
         .orderBy(col("count").desc())\
         .limit(5)
+        write_output(get_top_5_zip_codes, output_path, output_format)
         
         return[row[0] for row in get_top_5_zip_codes.collect()]
     
@@ -94,10 +116,9 @@ class USVehicleAccidentAnalysis:
             (self.df_units.VEH_DMAG_SCL_1_ID > "DAMAGED 4") & (~self.df_units.VEH_DMAG_SCL_1_ID.isin(["NA","NO DAMAGE","IVALID VALUE"]))\
                 | (self.df_units.VEH_DMAG_SCL_2_ID > "DAMAGED 4") & (~self.df_units.VEH_DMAG_SCL_2_ID.isin(["NA","NO DAMAGE","IVALID VALUE"]))
         ).filter(self.df_damages.DAMAGED_PROPERTY == "NONE")\
-        .filter(self.df_units.FIN_RESP_TYPE_ID =="PROOF OF LIABILITY INSURANCE")\
-        .distinct()\
-        .count()
+        .filter(self.df_units.FIN_RESP_TYPE_ID =="PROOF OF LIABILITY INSURANCE")
         
+        write_output(no_damaged_property, output_path, output_format)
         return [row[0] for row in no_damaged_property.collect()]
     
     def get_top_5_vehicle_brand(self, output_path, output_format):
@@ -139,6 +160,7 @@ class USVehicleAccidentAnalysis:
             .orderBy(col("count").desc())
             .limit(5)
         )
+        write_output(df, output_path, output_format)
         return [row[0] for row in df.collect()]
     
         
